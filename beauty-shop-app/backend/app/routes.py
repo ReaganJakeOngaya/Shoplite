@@ -1,6 +1,6 @@
 from flask import request, jsonify
 from . import db
-from .models import Product, Service, Booking, ProductSale, Customer 
+from .models import Product, Service, Booking, ProductSale, Customer, Order, OrderItem
 from flask import Blueprint
 from datetime import datetime, timedelta 
 
@@ -420,3 +420,71 @@ def place_order():
 
     db.session.commit()
     return jsonify(order.to_dict()), 201
+
+
+# Get Order History (by Customer)
+@bp.route("/orders/customer/<int:customer_id>", methods=["GET"])
+def get_orders_by_customer(customer_id):
+    orders = Order.query.filter_by(customer_id=customer_id).order_by(Order.order_date.desc()).all()
+    return jsonify([order.to_dict() for order in orders])
+
+# Admin Order Status Update
+@bp.route("/orders/<int:order_id>/status", methods=["PUT"])
+def update_order_status(order_id):
+    data = request.get_json()
+    new_status = data.get("status")
+
+    if new_status not in ["pending", "completed", "cancelled"]:
+        return jsonify({"error": "Invalid status"}), 400
+
+    order = Order.query.get(order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+
+    if order.status == "cancelled":
+        return jsonify({"error": "Order already cancelled"}), 400
+
+    # Only restock if order is being cancelled
+    if new_status == "cancelled":
+        for item in order.items:
+            product = Product.query.get(item.product_id)
+            if product:
+                product.quantity += item.quantity
+
+    order.status = new_status
+    db.session.commit()
+    return jsonify(order.to_dict())
+
+
+# Get All Orders (for admin view)
+@bp.route("/orders", methods=["GET"])
+def get_all_orders():
+    orders = Order.query.order_by(Order.order_date.desc()).all()
+    return jsonify([order.to_dict() for order in orders])
+
+
+# Cancel Order with time limit
+@bp.route("/orders/<int:order_id>/cancel", methods=["PUT"])
+def cancel_order(order_id):
+    order = Order.query.get(order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+
+    # Already cancelled or completed?
+    if order.status in ["cancelled", "completed"]:
+        return jsonify({"error": f"Cannot cancel a {order.status} order"}), 400
+
+    # Check if within 2 minutes
+    time_limit = order.order_date + timedelta(minutes=2)
+    if datetime.utcnow() > time_limit:
+        return jsonify({"error": "Cancellation window has expired"}), 403
+
+    # Restock products
+    for item in order.items:
+        product = Product.query.get(item.product_id)
+        if product:
+            product.quantity += item.quantity
+
+    order.status = "cancelled"
+    db.session.commit()
+    return jsonify({"message": "Order cancelled and items restocked", "order": order.to_dict()})
