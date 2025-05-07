@@ -488,3 +488,64 @@ def cancel_order(order_id):
     order.status = "cancelled"
     db.session.commit()
     return jsonify({"message": "Order cancelled and items restocked", "order": order.to_dict()})
+
+
+# Low Stock Alert
+@bp.route("/alerts/low-stock", methods=["GET"])
+def low_stock_alerts():
+    threshold = request.args.get("threshold", 5, type=int)  # Default threshold is 5
+    low_stock_products = Product.query.filter(Product.quantity <= threshold).all()
+    return jsonify([product.to_dict() for product in low_stock_products])
+
+# Expiring Soon Alert
+@bp.route("/alerts/expiring-soon", methods=["GET"])
+def expiring_soon_alerts():
+    days = request.args.get("days", 7, type=int)  # Default 7 days
+    today = datetime.utcnow().date()
+    expiry_limit = today + timedelta(days=days)
+
+    expiring_products = Product.query.filter(
+        Product.expiry_date != None,
+        Product.expiry_date <= expiry_limit
+    ).all()
+    return jsonify([product.to_dict() for product in expiring_products])
+
+# Sales Analytics
+@bp.route("/analytics/profit-loss", methods=["GET"])
+def profit_loss():
+    # Optional: filter by date
+    start_date_str = request.args.get("start")
+    end_date_str = request.args.get("end")
+
+    query = Order.query.filter_by(status="completed")
+
+    if start_date_str:
+        start_date = datetime.fromisoformat(start_date_str)
+        query = query.filter(Order.order_date >= start_date)
+    if end_date_str:
+        end_date = datetime.fromisoformat(end_date_str)
+        query = query.filter(Order.order_date <= end_date)
+
+    orders = query.all()
+
+    total_revenue = 0
+    total_cost = 0
+
+    for order in orders:
+        for item in order.items:
+            product = Product.query.get(item.product_id)
+            if product:
+                revenue = item.quantity * item.price
+                cost = item.quantity * product.cost_price
+                total_revenue += revenue
+                total_cost += cost
+
+    total_profit = total_revenue - total_cost
+
+    return jsonify({
+        "total_revenue": total_revenue,
+        "total_cost": total_cost,
+        "total_profit": total_profit,
+        "from": start_date_str,
+        "to": end_date_str
+    })
