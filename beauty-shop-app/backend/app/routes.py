@@ -1,13 +1,12 @@
 from flask import request, jsonify
 from . import db
-from .models import Product, Service
+from .models import Product, Service, Booking
 from flask import Blueprint
 from datetime import datetime
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 # CREATE a product
-from datetime import datetime
 
 @bp.route("/products", methods=["POST"])
 def create_product():
@@ -169,3 +168,58 @@ def delete_service(id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+
+# CREATE a booking
+@bp.route("/bookings", methods=["POST"])
+def create_booking():
+    data = request.get_json()
+    if not data or "service_id" not in data or "customer_name" not in data or "scheduled_time" not in data:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        booking = Booking(
+            service_id=data["service_id"],
+            customer_name=data["customer_name"],
+            scheduled_time=datetime.fromisoformat(data["scheduled_time"]),
+            status=data.get("status", "scheduled"),
+            payment_status=data.get("payment_status", "unpaid")
+        )
+        db.session.add(booking)
+        db.session.commit()
+        return jsonify(booking.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+# GET all bookings
+@bp.route("/bookings", methods=["GET"])
+def get_bookings():
+    bookings = Booking.query.all()
+    return jsonify([b.to_dict() for b in bookings])
+
+# GET one booking
+@bp.route("/bookings/<int:id>", methods=["GET"])
+def get_booking(id):
+    booking = Booking.query.get_or_404(id)
+    return jsonify(booking.to_dict())
+
+# UPDATE booking
+@bp.route("/bookings/<int:id>", methods=["PUT"])
+def update_booking(id):
+    booking = Booking.query.get_or_404(id)
+    data = request.get_json()
+    booking.customer_name = data.get("customer_name", booking.customer_name)
+    booking.scheduled_time = datetime.fromisoformat(data.get("scheduled_time")) if data.get("scheduled_time") else booking.scheduled_time
+    booking.status = data.get("status", booking.status)
+    booking.payment_status = data.get("payment_status", booking.payment_status)
+    db.session.commit()
+    return jsonify(booking.to_dict())
+
+# DELETE booking
+@bp.route("/bookings/<int:id>", methods=["DELETE"])
+def delete_booking(id):
+    booking = Booking.query.get_or_404(id)
+    db.session.delete(booking)
+    db.session.commit()
+    return jsonify({"message": "Booking deleted successfully"})
