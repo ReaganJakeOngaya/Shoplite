@@ -12,7 +12,7 @@ def create_app():
     CORS(app)  # Enable CORS for all routes
     
     with app.app_context():
-        from . import routes
+        from . import models, routes
         db.create_all()
         
     return app
