@@ -373,3 +373,50 @@ def login():
         "message": "Login successful",
         "customer": customer.to_dict()
     }), 200
+
+# Order
+@bp.route("/orders", methods=["POST"])
+def place_order():
+    data = request.get_json()
+    customer_id = data.get("customer_id")
+    items = data.get("items")  # [{product_id, quantity}]
+
+    if not customer_id or not items:
+        return jsonify({"error": "Missing customer or items"}), 400
+
+    total = 0
+    order_items = []
+
+    for item in items:
+        product = Product.query.get(item["product_id"])
+        if not product or product.quantity < item["quantity"]:
+            return jsonify({"error": f"Product {item['product_id']} not available in required quantity"}), 400
+
+        price = product.sale_price
+        total += price * item["quantity"]
+
+        order_items.append({
+            "product": product,
+            "quantity": item["quantity"],
+            "price": price
+        })
+
+    # Create Order
+    order = Order(customer_id=customer_id, total_price=total)
+    db.session.add(order)
+    db.session.flush()  # Get order.id
+
+    for item in order_items:
+        order_item = OrderItem(
+            order_id=order.id,
+            product_id=item["product"].id,
+            quantity=item["quantity"],
+            price=item["price"]
+        )
+        db.session.add(order_item)
+
+        # Update product stock
+        item["product"].quantity -= item["quantity"]
+
+    db.session.commit()
+    return jsonify(order.to_dict()), 201

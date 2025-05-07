@@ -116,4 +116,40 @@ class Customer(db.Model):
             "email": self.email
         }
         
-        
+class Order(db.Model):
+    __tablename__ = "orders"
+    id = db.Column(db.Integer, primary_key=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=False)
+    total_price = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(50), default="pending")  # pending, completed, cancelled
+    order_date = db.Column(db.DateTime, default=datetime.utcnow)
+
+    items = db.relationship("OrderItem", backref="order", lazy=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "customer_id": self.customer_id,
+            "total_price": self.total_price,
+            "status": self.status,
+            "order_date": self.order_date,
+            "items": [item.to_dict() for item in self.items]
+        }
+
+class OrderItem(db.Model):
+    __tablename__ = "order_items"
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    price = db.Column(db.Float, nullable=False)  # unit price at time of order
+
+    product = db.relationship("Product")
+
+    def to_dict(self):
+        return {
+            "product_id": self.product_id,
+            "product_name": self.product.name,
+            "quantity": self.quantity,
+            "price": self.price
+        }
