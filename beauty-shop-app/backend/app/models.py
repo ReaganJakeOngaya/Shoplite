@@ -67,3 +67,25 @@ class Booking(db.Model):
             "payment_status": self.payment_status,
             "created_at": self.created_at.isoformat()
         }
+        
+class ProductSale(db.Model):
+    __tablename__ = 'product_sales'
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    quantity_sold = db.Column(db.Integer, nullable=False)
+    sale_price = db.Column(db.Float, nullable=False)
+    sale_date = db.Column(db.DateTime, default=datetime.utcnow)
+
+    product = db.relationship('Product', backref='sales')
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "product_id": self.product_id,
+            "product_name": self.product.name if self.product else None,
+            "quantity_sold": self.quantity_sold,
+            "sale_price": self.sale_price,
+            "sale_date": self.sale_date.isoformat()
+        }
+        

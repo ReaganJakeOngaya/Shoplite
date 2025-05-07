@@ -1,6 +1,6 @@
 from flask import request, jsonify
 from . import db
-from .models import Product, Service, Booking
+from .models import Product, Service, Booking, ProductSale 
 from flask import Blueprint
 from datetime import datetime
 
@@ -223,3 +223,50 @@ def delete_booking(id):
     db.session.delete(booking)
     db.session.commit()
     return jsonify({"message": "Booking deleted successfully"})
+
+
+# Create a sale
+@bp.route("/sales", methods=["POST"])
+def create_product_sale():
+    data = request.get_json()
+    if not data or "product_id" not in data or "quantity_sold" not in data or "sale_price" not in data:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    product = Product.query.get(data["product_id"])
+    if not product:
+        return jsonify({"error": "Product not found"}), 404
+
+    # Optionally: reduce quantity from stock (optional)
+    if product.quantity < data["quantity_sold"]:
+        return jsonify({"error": "Not enough stock"}), 400
+    product.quantity -= data["quantity_sold"]
+
+    sale = ProductSale(
+        product_id=data["product_id"],
+        quantity_sold=data["quantity_sold"],
+        sale_price=data["sale_price"]
+    )
+    db.session.add(sale)
+    db.session.commit()
+    return jsonify(sale.to_dict()), 201
+
+# List all sales
+@bp.route("/sales", methods=["GET"])
+def get_product_sales():
+    sales = ProductSale.query.all()
+    return jsonify([s.to_dict() for s in sales])
+
+# Get profit summary
+@bp.route("/sales/summary", methods=["GET"])
+def get_sales_summary():
+    sales = ProductSale.query.all()
+    total_revenue = sum(s.quantity_sold * s.sale_price for s in sales)
+    total_cost = sum(s.quantity_sold * s.product.cost_price for s in sales)
+    profit = total_revenue - total_cost
+
+    return jsonify({
+        "total_revenue": total_revenue,
+        "total_cost": total_cost,
+        "net_profit": profit
+    })
+
