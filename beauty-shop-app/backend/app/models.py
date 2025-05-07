@@ -1,4 +1,5 @@
 from . import db
+import hashlib
 from datetime import datetime
 
 class Product(db.Model):
@@ -48,7 +49,7 @@ class Booking(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     service_id = db.Column(db.Integer, db.ForeignKey('services.id'), nullable=False)
-    customer_name = db.Column(db.String(100), nullable=False)  # Can be changed to customer_id later
+    customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=False)
     scheduled_time = db.Column(db.DateTime, nullable=False)
     status = db.Column(db.String(50), default="scheduled")  # scheduled, completed, cancelled
     payment_status = db.Column(db.String(50), default="unpaid")  # unpaid, paid
@@ -61,7 +62,8 @@ class Booking(db.Model):
             "id": self.id,
             "service_id": self.service_id,
             "service_name": self.service.name if self.service else None,
-            "customer_name": self.customer_name,
+            "customer_id": self.customer_id,
+            "customer_name": self.customer.name if self.customer else None,
             "scheduled_time": self.scheduled_time.isoformat(),
             "status": self.status,
             "payment_status": self.payment_status,
@@ -88,4 +90,30 @@ class ProductSale(db.Model):
             "sale_price": self.sale_price,
             "sale_date": self.sale_date.isoformat()
         }
+        
+        
+
+class Customer(db.Model):
+    __tablename__ = 'customers'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128), nullable=False)
+
+    bookings = db.relationship("Booking", backref="customer", lazy=True)
+
+    def set_password(self, password):
+        self.password_hash = hashlib.sha256(password.encode()).hexdigest()
+
+    def check_password(self, password):
+        return self.password_hash == hashlib.sha256(password.encode()).hexdigest()
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "email": self.email
+        }
+        
         

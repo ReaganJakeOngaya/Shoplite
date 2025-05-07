@@ -1,6 +1,6 @@
 from flask import request, jsonify
 from . import db
-from .models import Product, Service, Booking, ProductSale 
+from .models import Product, Service, Booking, ProductSale, Customer 
 from flask import Blueprint
 from datetime import datetime, timedelta 
 
@@ -270,7 +270,7 @@ def get_sales_summary():
         "net_profit": profit
     })
 
-
+# Alert Api
 @bp.route("/alerts/products", methods=["GET"])
 def product_alerts():
     low_stock_threshold = 5
@@ -296,3 +296,80 @@ def product_alerts():
         "near_expiry": [p.to_dict() for p in near_expiry],
         "slow_selling": [p.to_dict() for p in slow_selling_products]
     })
+
+# Summary API endpoints
+@bp.route("/admin/summary", methods=["GET"])
+def admin_summary():
+    total_products = Product.query.count()
+    total_services = Service.query.count()
+    total_bookings = Booking.query.count()
+    total_sales = ProductSale.query.count()
+
+    # Total revenue from product sales
+    sales = ProductSale.query.all()
+    total_revenue = sum(s.quantity_sold * s.sale_price for s in sales)
+    total_cost = sum(s.quantity_sold * s.product.cost_price for s in sales)
+    net_profit = total_revenue - total_cost
+
+    # Most sold product
+    popular_product = db.session.query(
+        Product.name, db.func.sum(ProductSale.quantity_sold).label("total_sold")
+    ).join(ProductSale).group_by(Product.id).order_by(db.desc("total_sold")).first()
+
+    # Most booked service
+    popular_service = db.session.query(
+        Service.name, db.func.count(Booking.id).label("total_booked")
+    ).join(Booking).group_by(Service.id).order_by(db.desc("total_booked")).first()
+
+    return jsonify({
+        "totals": {
+            "products": total_products,
+            "services": total_services,
+            "bookings": total_bookings,
+            "sales": total_sales
+        },
+        "revenue": {
+            "total_revenue": total_revenue,
+            "total_cost": total_cost,
+            "net_profit": net_profit
+        },
+        "popular_product": {
+            "name": popular_product[0] if popular_product else None,
+            "sold": popular_product[1] if popular_product else 0
+        },
+        "popular_service": {
+            "name": popular_service[0] if popular_service else None,
+            "booked": popular_service[1] if popular_service else 0
+        }
+    })
+
+
+# Register
+@bp.route("/auth/register", methods=["POST"])
+def register():
+    data = request.get_json()
+    if not data or not all(k in data for k in ("name", "email", "password")):
+        return jsonify({"error": "Missing fields"}), 400
+
+    if Customer.query.filter_by(email=data["email"]).first():
+        return jsonify({"error": "Email already registered"}), 400
+
+    customer = Customer(name=data["name"], email=data["email"])
+    customer.set_password(data["password"])
+    db.session.add(customer)
+    db.session.commit()
+
+    return jsonify(customer.to_dict()), 201
+
+# Login
+@bp.route("/auth/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    customer = Customer.query.filter_by(email=data.get("email")).first()
+    if not customer or not customer.check_password(data.get("password")):
+        return jsonify({"error": "Invalid email or password"}), 401
+
+    return jsonify({
+        "message": "Login successful",
+        "customer": customer.to_dict()
+    }), 200
