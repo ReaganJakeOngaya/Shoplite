@@ -2,7 +2,7 @@ from flask import request, jsonify
 from . import db
 from .models import Product, Service, Booking, ProductSale 
 from flask import Blueprint
-from datetime import datetime
+from datetime import datetime, timedelta 
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -270,3 +270,29 @@ def get_sales_summary():
         "net_profit": profit
     })
 
+
+@bp.route("/alerts/products", methods=["GET"])
+def product_alerts():
+    low_stock_threshold = 5
+    expiration_threshold = timedelta(days=7)
+    slow_sales_threshold_days = 14
+    today = datetime.utcnow()
+
+    low_stock = Product.query.filter(Product.quantity <= low_stock_threshold).all()
+    near_expiry = Product.query.filter(Product.expiry_date != None).filter(
+        Product.expiry_date <= (today + expiration_threshold).date()
+    ).all()
+
+    # Products not sold in the last 14 days
+    slow_selling_products = []
+    all_products = Product.query.all()
+    for product in all_products:
+        recent_sale = ProductSale.query.filter_by(product_id=product.id).order_by(ProductSale.sale_date.desc()).first()
+        if not recent_sale or (today - recent_sale.sale_date).days >= slow_sales_threshold_days:
+            slow_selling_products.append(product)
+
+    return jsonify({
+        "low_stock": [p.to_dict() for p in low_stock],
+        "near_expiry": [p.to_dict() for p in near_expiry],
+        "slow_selling": [p.to_dict() for p in slow_selling_products]
+    })
