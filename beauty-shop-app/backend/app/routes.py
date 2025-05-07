@@ -1,6 +1,6 @@
 from flask import request, jsonify
 from . import db
-from .models import Product
+from .models import Product, Service
 from flask import Blueprint
 from datetime import datetime
 
@@ -103,3 +103,69 @@ def delete_product(id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
+# CREATE service
+@bp.route("/services", methods=["POST"])
+def create_service():
+    data = request.get_json()
+    if not data or "name" not in data or "price" not in data:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        service = Service(
+            name=data["name"],
+            description=data.get("description"),
+            price=float(data["price"]),
+            duration_minutes=int(data["duration_minutes"]) if data.get("duration_minutes") else None
+        )
+        db.session.add(service)
+        db.session.commit()
+        return jsonify(service.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+# GET all services
+@bp.route("/services", methods=["GET"])
+def get_services():
+    try:
+        services = Service.query.all()
+        return jsonify([s.to_dict() for s in services])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# GET one service
+@bp.route("/services/<int:id>", methods=["GET"])
+def get_service(id):
+    try:
+        service = Service.query.get_or_404(id)
+        return jsonify(service.to_dict())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# UPDATE service
+@bp.route("/services/<int:id>", methods=["PUT"])
+def update_service(id):
+    service = Service.query.get_or_404(id)
+    data = request.get_json()
+    try:
+        service.name = data.get("name", service.name)
+        service.description = data.get("description", service.description)
+        service.price = float(data.get("price", service.price))
+        service.duration_minutes = int(data.get("duration_minutes", service.duration_minutes))
+        db.session.commit()
+        return jsonify(service.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+# DELETE service
+@bp.route("/services/<int:id>", methods=["DELETE"])
+def delete_service(id):
+    try:
+        service = Service.query.get_or_404(id)
+        db.session.delete(service)
+        db.session.commit()
+        return jsonify({"message": "Service deleted successfully"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
