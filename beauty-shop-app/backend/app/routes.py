@@ -45,18 +45,22 @@ def create_product():
 # READ all products
 @bp.route("/products", methods=["GET"])
 def get_products():
-    products = Product.query.all()
-    return jsonify([p.to_dict() for p in products])
+    try:
+        products = Product.query.all()
+        return jsonify([p.to_dict() for p in products])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # READ a single product
 @bp.route("/products/<int:id>", methods=["GET"])
 def get_product(id):
-    product = Product.query.get_or_404(id)
-    return jsonify(product.to_dict())
+    try:
+        product = Product.query.get_or_404(id)
+        return jsonify(product.to_dict())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # UPDATE a product
-from datetime import datetime
-
 @bp.route("/products/<int:id>", methods=["PUT"])
 def update_product(id):
     product = Product.query.get_or_404(id)
@@ -91,6 +95,11 @@ def update_product(id):
 @bp.route("/products/<int:id>", methods=["DELETE"])
 def delete_product(id):
     product = Product.query.get_or_404(id)
-    db.session.delete(product)
-    db.session.commit()
-    return jsonify({"message": "Product deleted successfully"})
+    try:
+        db.session.delete(product)
+        db.session.commit()
+        return jsonify({"message": "Product deleted successfully"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
