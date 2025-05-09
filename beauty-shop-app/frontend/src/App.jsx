@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
 import { ThemeProvider } from "./context/ThemeContext";
+import ServicesList from "./pages/ServiceList";
 
 function App() {
   return (
@@ -17,7 +18,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/products" element={<Products />} />
-                {/* Add more routes here */}
+                <Route path="/services" element={<ServicesList />} />
               </Routes>
             </div>
           </main>
